@@ -1,16 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Windows.Forms;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 
-namespace WebScraper.Web
+namespace WebScraper.NET.Web
 {
-    public interface HtmlElementDataExtractor<V> : DataExtractor<HtmlElement, V>
+    public interface IHtmlElementDataExtractor<V> : IDataExtractor<HtmlElement, V>
     {
     }
-    public abstract class AbstractHtmlElementDataExtractor<V> : HtmlElementDataExtractor<V>
+    public abstract class AbstractHtmlElementDataExtractor<V> : ExtensionMethods, IHtmlElementDataExtractor<V>
     {
         public string Part { get; set; }
         public AbstractHtmlElementDataExtractor()
@@ -21,75 +19,62 @@ namespace WebScraper.Web
         {
             this.Part = part;
         }
-        public string getString(HtmlElement element)
+        public string GetString(HtmlElement element)
         {
-            string ret = null;
-            if (null != element)
+            var ret = string.Empty;
+            if (IsNull(element)) return ret;
+            if (":outerhtml".Equals(Part))
             {
-                if (":outerhtml".Equals(Part))
-                {
-                    ret = element.OuterHtml;
-                }
-                else if (":outertext".Equals(Part))
-                {
-                    ret = element.OuterText;
-                }
-                else if (":innerhtml".Equals(Part))
-                {
-                    ret = element.InnerHtml;
-                }
-                else if (":innertext".Equals(Part))
-                {
-                    ret = element.InnerText;
-                }
-                else
-                {
-                    ret = element.GetAttribute(Part);
-                }
+                ret = element.OuterHtml;
+            }
+            else if (":outertext".Equals(Part))
+            {
+                ret = element.OuterText;
+            }
+            else if (":innerhtml".Equals(Part))
+            {
+                ret = element.InnerHtml;
+            }
+            else if (":innertext".Equals(Part))
+            {
+                ret = element.InnerText;
+            }
+            else
+            {
+                ret = element.GetAttribute(Part);
             }
             return ret;
         }
-        public abstract V extract(HtmlElement element);
+        public abstract V Extract(HtmlElement element);
     }
-    public abstract class AbstractUrlHtmlElementDataExtractor<V> : HtmlElementDataExtractor<V>
+    public abstract class AbstractUrlHtmlElementDataExtractor<TV> : ExtensionMethods, IHtmlElementDataExtractor<TV>
     {
         public AbstractUrlHtmlElementDataExtractor()
         {
 
         }
-        public Uri getUrl(HtmlElement element)
+        public Uri GetUrl(HtmlElement element)
         {
-            Uri ret = null;
-            if (null != element)
-            {
-                ret = element.Document.Window.Url;
-            }
-            return ret;
+            return element?.Document?.Window?.Url;
         }
-        public abstract V extract(HtmlElement element);
+        public abstract TV Extract(HtmlElement element);
     }
-    public abstract class AbstractCookieHtmlElementDataExtractor<V> : HtmlElementDataExtractor<V>
+    public abstract class AbstractCookieHtmlElementDataExtractor<V> : ExtensionMethods, IHtmlElementDataExtractor<V>
     {
         public AbstractCookieHtmlElementDataExtractor()
         {
 
         }
-        public String getCookie(HtmlElement element)
+        public string GetCookie(HtmlElement element)
         {
-            String ret = null;
-            if (null != element)
-            {
-                ret = element.Document.Cookie;
-            }
-            return ret;
+            return element?.Document?.Cookie;
         }
-        public abstract V extract(HtmlElement element);
+        public abstract V Extract(HtmlElement element);
     }
 
     public class StringHtmlElementDataExtractor : AbstractHtmlElementDataExtractor<string>
     {
         public StringHtmlElementDataExtractor()
-            : base()
         {
 
         }
@@ -97,17 +82,16 @@ namespace WebScraper.Web
             : base(part: part)
         {
         }
-        public override string extract(HtmlElement element)
+        public override string Extract(HtmlElement element)
         {
-            return getString(element);
+            return GetString(element);
         }
 
     }
 
-    public class BooleanHtmlElementDataExtractor : AbstractHtmlElementDataExtractor<Boolean>
+    public class BooleanHtmlElementDataExtractor : AbstractHtmlElementDataExtractor<bool>
     {
         public BooleanHtmlElementDataExtractor()
-            : base()
         {
 
         }
@@ -115,42 +99,36 @@ namespace WebScraper.Web
             : base(part: part)
         {
         }
-        public override Boolean extract(HtmlElement element)
+        public override bool Extract(HtmlElement element)
         {
-            Boolean ret = false;
-            String text = getString(element);
-            ret = (null != text && !text.Trim().ToLower().Equals("false"));
+            var text = GetString(element);
+            var ret = (!IsNull(text) && !text.Trim().ToLower().Equals("false"));
             return ret;
         }
 
     }
 
-    public class BooleanUrlHtmlElementDataExtractor : AbstractUrlHtmlElementDataExtractor<Boolean>
+    public class BooleanUrlHtmlElementDataExtractor : AbstractUrlHtmlElementDataExtractor<bool>
     {
         public Regex Matcher { get; set; }
-        public Boolean ShouldMatch { get; set; }
+        public bool ShouldMatch { get; set; }
         public BooleanUrlHtmlElementDataExtractor()
-            : base()
         {
             ShouldMatch = true;
         }
-        public BooleanUrlHtmlElementDataExtractor(Regex matcher = null, Boolean shouldMatch = true)
-            : base()
+        public BooleanUrlHtmlElementDataExtractor(Regex matcher = null, bool shouldMatch = true)
         {
-            this.Matcher = matcher;
-            this.ShouldMatch = shouldMatch;
+            Matcher = matcher;
+            ShouldMatch = shouldMatch;
         }
-        public override Boolean extract(HtmlElement element)
+        public override bool Extract(HtmlElement element)
         {
-            Boolean ret = false;
-            Uri url = getUrl(element);
-            if (null != Matcher)
+            var url = GetUrl(element);
+            if (IsNull(Matcher)) return false;
+            var ret = Matcher.IsMatch(url.ToString());
+            if (!ShouldMatch)
             {
-                ret = Matcher.IsMatch(url.ToString());
-                if (!ShouldMatch)
-                {
-                    ret = !ret;
-                }
+                ret = !ret;
             }
             return ret;
         }
@@ -160,29 +138,25 @@ namespace WebScraper.Web
     public class BooleanCookieHtmlElementDataExtractor : AbstractCookieHtmlElementDataExtractor<Boolean>
     {
         public Regex Matcher { get; set; }
-        public Boolean ShouldMatch { get; set; }
+        public bool ShouldMatch { get; set; }
         public BooleanCookieHtmlElementDataExtractor()
-            : base()
         {
             ShouldMatch = true;
         }
-        public BooleanCookieHtmlElementDataExtractor(Regex matcher = null, Boolean shouldMatch = true)
-            : base()
+        public BooleanCookieHtmlElementDataExtractor(Regex matcher = null, bool shouldMatch = true)
         {
-            this.Matcher = matcher;
-            this.ShouldMatch = shouldMatch;
+            Matcher = matcher;
+            ShouldMatch = shouldMatch;
         }
-        public override Boolean extract(HtmlElement element)
+        public override bool Extract(HtmlElement element)
         {
-            Boolean ret = false;
-            String cookie = getCookie(element);
-            if (null != Matcher)
+
+            var cookie = GetCookie(element);
+            if (IsNull(Matcher)) return false;
+            var ret = Matcher.IsMatch(cookie);
+            if (!ShouldMatch)
             {
-                ret = Matcher.IsMatch(cookie);
-                if (!ShouldMatch)
-                {
-                    ret = !ret;
-                }
+                ret = !ret;
             }
             return ret;
         }
@@ -191,39 +165,38 @@ namespace WebScraper.Web
 
     public class ListHtmlElementDataExtractor<V> : AbstractHtmlElementDataExtractor<List<V>>
     {
-        public ElementMatcher<HtmlElement> Matcher { get; set; }
-        public HtmlElementDataExtractor<V> Extractor { get; set; }
+        public IElementMatcher<HtmlElement> Matcher { get; set; }
+        public IHtmlElementDataExtractor<V> Extractor { get; set; }
         public ElementTarget Target { get; set; }
         public ListHtmlElementDataExtractor()
-            : base()
         {
 
         }
-        public ListHtmlElementDataExtractor(ElementMatcher<HtmlElement> matcher = null, ElementTarget target = ElementTarget.SELF, HtmlElementDataExtractor<V> extractor = null)
+        public ListHtmlElementDataExtractor(IElementMatcher<HtmlElement> matcher = null, ElementTarget target = ElementTarget.Self, IHtmlElementDataExtractor<V> extractor = null)
         {
             Matcher = matcher;
             Target = target;
             Extractor = extractor;
         }
-        public override List<V> extract(HtmlElement element)
+        public override List<V> Extract(HtmlElement element)
         {
-            List<V> ret = new List<V>();
-            if (Target.Equals(ElementTarget.SELF))
+            var ret = new List<V>();
+            if (Target.Equals(ElementTarget.Self))
             {
-                if (null == Matcher || Matcher.match(element))
+                if (IsNull(Matcher) || Matcher.Match(element))
                 {
-                    ret.Add(Extractor.extract(element));
+                    ret.Add(Extractor.Extract(element));
                 }
             }
             else
             {
-                foreach (HtmlElement childNode in Target.Equals(ElementTarget.ALL_CHILDREN) ? element.All : element.Children)
+                foreach (HtmlElement childNode in Target.Equals(ElementTarget.AllChildren) ? element.All : element.Children)
                 {
-                    if (null != Matcher && !Matcher.match(childNode))
+                    if (!IsNull(Matcher) && !Matcher.Match(childNode))
                     {
                         continue;
                     }
-                    ret.Add(Extractor.extract(childNode));
+                    ret.Add(Extractor.Extract(childNode));
                 }
             }
             return ret;

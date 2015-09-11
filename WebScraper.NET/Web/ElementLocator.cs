@@ -1,30 +1,21 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Windows.Forms;
-using System.Threading;
-
-
-namespace WebScraper.Web
+﻿namespace WebScraper.NET.Web
 {
-    public interface ElementLocator<T>
+    public interface IElementLocator<out T>
     {
-        string getName();
-        T locate(Agent agent);
+        string GetName();
+        T Locate(Agent agent);
     }
-    public interface ElementMatcher<T>
+    public interface IElementMatcher<in T>
     {
-        string getName();
-        bool match(T element);
+        string GetName();
+        bool Match(T element);
     }
-    public interface DataExtractor<T, V>
+    public interface IDataExtractor<in T, out TV>
     {
-        V extract(T element);
+        TV Extract(T element);
     }
     public enum ElementTarget
     {
-        SELF, CHILDREN, ALL_CHILDREN
+        Self, Children, AllChildren
     }
 }

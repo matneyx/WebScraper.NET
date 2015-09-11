@@ -1,66 +1,46 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Xml;
+﻿using System.Linq;
 using System.Windows.Forms;
-using System.Text.RegularExpressions;
 
-namespace WebScraper.Web
+namespace WebScraper.NET.Web
 {
-    public interface ChildHtmlElementLocator
+    public interface IChildHtmlElementLocator
     {
-        string getName();
-        HtmlElement locate(HtmlElement parent);
+        string GetName();
+        HtmlElement Locate(HtmlElement parent);
     }
 
-    public abstract class AbstractChildHtmlElementLocator : ChildHtmlElementLocator
+    public abstract class AbstractChildHtmlElementLocator : IChildHtmlElementLocator
     {
         public string Name { get; set; }
         public AbstractChildHtmlElementLocator()
-            : base()
         {
 
         }
         public AbstractChildHtmlElementLocator(string name = null)
         {
-            this.Name = name;
+            Name = name;
         }
-        public string getName()
+        public string GetName()
         {
             return Name;
         }
-        public abstract HtmlElement locate(HtmlElement parent);
+        public abstract HtmlElement Locate(HtmlElement parent);
     }
 
     public class SimpleChildHtmlElementLocator : AbstractChildHtmlElementLocator
     {
-        public ElementMatcher<HtmlElement> Matcher { get; set; }
+        public IElementMatcher<HtmlElement> Matcher { get; set; }
         public SimpleChildHtmlElementLocator()
-            : base()
         {
 
         }
-        public SimpleChildHtmlElementLocator(string name = null, ElementMatcher<HtmlElement> matcher = null)
-            : base()
+        public SimpleChildHtmlElementLocator(string name = null, IElementMatcher<HtmlElement> matcher = null)
         {
-            this.Matcher = matcher;
+            Matcher = matcher;
         }
-        public override HtmlElement locate(HtmlElement parent)
+        public override HtmlElement Locate(HtmlElement parent)
         {
-            HtmlElement ret = null;
-            if (null != parent)
-            {
-                foreach (HtmlElement child in parent.All)
-                {
-                    if (Matcher.match(child))
-                    {
-                        ret = child;
-                        break;
-                    }
-                }
-            }
-            return ret;
+            return parent?.All.Cast<HtmlElement>().FirstOrDefault(child => Matcher.Match(child));
         }
 
     }

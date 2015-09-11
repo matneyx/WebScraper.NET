@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Windows.Forms;
 using System.Text.RegularExpressions;
 
-namespace WebScraper.Web
+namespace WebScraper.NET.Web
 {
-    public abstract class CookieLocator : ElementLocator<String>
+    public abstract class CookieLocator : ExtensionMethods, IElementLocator<String>
     {
         public string Name { get; set; }
         public string ContextKey { get; set; }
@@ -17,14 +13,14 @@ namespace WebScraper.Web
         }
         public CookieLocator(string name = null, string contextKey = null)
         {
-            this.Name = name;
-            this.ContextKey = contextKey;
+            Name = name;
+            ContextKey = contextKey;
         }
-        public string getName()
+        public string GetName()
         {
             return Name;
         }
-        public abstract String locate(Agent agent);
+        public abstract string Locate(Agent agent);
     }
 
     public class CookieElementLocator : CookieLocator
@@ -32,33 +28,29 @@ namespace WebScraper.Web
         public Regex NameRegex { get; set; }
 
         public CookieElementLocator()
-            : base()
         {
 
         }
-        public CookieElementLocator(string name = null, Regex nameRegex = null, String contextKey = null)
+        public CookieElementLocator(string name = null, Regex nameRegex = null, string contextKey = null)
             : base(name, contextKey)
         {
-            this.NameRegex = nameRegex;
+            NameRegex = nameRegex;
         }
 
-        public override String locate(Agent agent)
+        public override string Locate(Agent agent)
         {
-            String ret = null;
-            if (null != agent)
+            var ret = string.Empty;
+            var cookieValue = agent?.WebBrowser.Document?.Cookie;
+            if (!IsNull(cookieValue) && !IsNull(NameRegex))
             {
-                String cookieValue = agent.WebBrowser.Document.Cookie;
-                if (null != cookieValue && null != NameRegex)
+                if (NameRegex.IsMatch(cookieValue))
                 {
-                    if (NameRegex.IsMatch(cookieValue))
-                    {
-                        ret = NameRegex.Match(cookieValue).Value;
-                    }
+                    ret = NameRegex.Match(cookieValue).Value;
                 }
             }
-            if (null != ContextKey)
+            if (!IsNull(ContextKey))
             {
-                agent.RequestContext.Add(ContextKey, ret);
+                agent?.RequestContext.Add(ContextKey, ret);
             }
             return ret;
         }

@@ -54,6 +54,7 @@
     <Compile Include="Web\ChildHtmlElementLocator.cs" />
     <Compile Include="Web\CookieLocator.cs" />
     <Compile Include="Web\ElementLocator.cs" />
+    <Compile Include="Web\ExtensionMethods.cs" />
     <Compile Include="Web\HtmlElementDataExtractor.cs" />
     <Compile Include="Web\HtmlElementLocator.cs" />
     <Compile Include="Web\HtmlElementMatcher.cs" />

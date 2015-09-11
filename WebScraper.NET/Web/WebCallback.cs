@@ -1,19 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
+﻿using System.Threading;
 using System.Windows.Forms;
-using System.Threading;
 
-
-namespace WebScraper.Web
+namespace WebScraper.NET.Web
 {
-    public interface WebCallback
+    public interface IWebCallback
     {
-        void callback(Agent agent);
+        void Callback(Agent agent);
     }
-    public class BackgroundInvoke : WebCallback
+    public class BackgroundInvoke : ExtensionMethods, IWebCallback
     {
         public string ElementId { get; set; }
         public string MethodName { get; set; }
@@ -22,24 +16,22 @@ namespace WebScraper.Web
 
         public BackgroundInvoke(string elementId = null, string methodName = "click", string attributeName = null, string attributeValue = null)
         {
-            this.ElementId = elementId;
-            this.MethodName = methodName;
-            this.AttributeName = attributeName;
-            this.AttributeValue = attributeValue;
+            ElementId = elementId;
+            MethodName = methodName;
+            AttributeName = attributeName;
+            AttributeValue = attributeValue;
         }
-        public void callback(Agent agent)
+        public void Callback(Agent agent)
         {
             MethodInvoker delegateCall = delegate
             {
-                HtmlElement element = agent.WebBrowser.Document.GetElementById(ElementId);
-                if (null != element)
+                var element = agent.WebBrowser.Document?.GetElementById(ElementId);
+                if (IsNull(element)) return;
+                if (!IsNull(AttributeName))
                 {
-                    if (null != AttributeName)
-                    {
-                        element.SetAttribute(AttributeName, AttributeValue);
-                    }
-                    element.InvokeMember(MethodName);
+                    element?.SetAttribute(AttributeName, AttributeValue);
                 }
+                element?.InvokeMember(MethodName);
             };
             if (agent.WebBrowser.InvokeRequired)
             {
@@ -51,22 +43,22 @@ namespace WebScraper.Web
             }
         }
     }
-    public class BlockingCallback : WebCallback
+    public class BlockingCallback : IWebCallback
     {
-        public void callback(Agent agent)
+        public void Callback(Agent agent)
         {
             Thread.Sleep(10000);
         }
     }
-    public class SendKeysCallback : WebCallback
+    public class SendKeysCallback : IWebCallback
     {
-        public String SendKey { get; set; }
+        public string SendKey { get; set; }
         public SendKeysCallback(string sendKey = null)
         {
             SendKey = sendKey;
         }
 
-        public void callback(Agent agent)
+        public void Callback(Agent agent)
         {
             agent.WebBrowser.Focus();
             SendKeys.SendWait(SendKey);

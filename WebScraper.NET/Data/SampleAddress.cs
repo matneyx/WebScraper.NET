@@ -1,22 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-namespace WebScraper.Data
+﻿namespace WebScraper.NET.Data
 {
     public class SampleAddress
     {
-        public String Code { get; set; }
+        public string Code { get; set; }
 
-        public String Apt { get; set; }
+        public string Apt { get; set; }
 
-        public String LineOne { get; set; }
+        public string LineOne { get; set; }
 
-        public String City { get; set; }
+        public string City { get; set; }
 
-        public String State { get; set; }
+        public string State { get; set; }
 
-        public String StateCode { get; set; }
+        public string StateCode { get; set; }
     }
 }

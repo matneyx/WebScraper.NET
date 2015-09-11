@@ -1,51 +1,45 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Windows.Forms;
+﻿using System.Collections.Generic;
 
-namespace WebScraper.Web
+namespace WebScraper.NET.Web
 {
     public class AutoLoginAgent : Agent
     {
         public bool LoginRequired { get; set; }
 
-        public List<WebAction> LoginActions { get; set; }
+        public List<IWebAction> LoginActions { get; set; }
 
-        public List<WebAction> LogoutActions { get; set; }
+        public List<IWebAction> LogoutActions { get; set; }
 
-        public ExtractWebAction<Boolean> LoginCheckAction { get; set; }
+        public ExtractWebAction<bool> LoginCheckAction { get; set; }
 
         public AutoLoginAgent()
         {
             LoginRequired = true;
         }
 
-        public void doLogin()
+        public void DoLogin()
         {
-            doActions(LoginActions);
+            DoActions(LoginActions);
         }
-        public void doLogout()
+        public void DoLogout()
         {
-            doActions(LogoutActions);
-            cleanup();
+            DoActions(LogoutActions);
+            Cleanup();
         }
-        public bool isLoggedIn()
+        public bool IsLoggedIn()
         {
-            bool ret = false;
             if (null == LoginCheckAction)
             {
                 //if the login check is not present then it is a free resource
-                ret = true;
-            } else {
-                LoginCheckAction.doAction(this);
-                ret = LoginCheckAction.ExtractedData;
+                return true;
             }
-            return ret;
+
+            LoginCheckAction.DoAction(this);
+            return LoginCheckAction.ExtractedData;
         }
-        public bool isLoggedOut()
+        public bool IsLoggedOut()
         {
-            return !isLoggedIn();
+            return !IsLoggedIn();
         }
     }
 }

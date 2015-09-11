@@ -1,13 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.ComponentModel;
-using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Windows.Forms;
-using WebScraper.Data;
 
-namespace WebScraper.Web
+namespace WebScraper.NET.Web
 {
 
     public class AccessTiming
@@ -18,35 +15,35 @@ namespace WebScraper.Web
         [DefaultValue(0)]
         public long TimingInTicks { get; private set; }
 
-        public DateTime StartTime { get; private set; }
+        public DateTime StartTime { get; }
 
         public DateTime CurrentStartTime { get; private set; }
 
-        public AccessTiming(Uri uri, long TimingInTicks = 0)
+        public AccessTiming(Uri uri, long timingInTicks = 0)
         {
-            this.URI = uri;
-            this.TimingInTicks = TimingInTicks;
-            this.StartTime = DateTime.UtcNow;
-            this.CurrentStartTime = this.StartTime;
+            URI = uri;
+            TimingInTicks = timingInTicks;
+            StartTime = DateTime.UtcNow;
+            CurrentStartTime = StartTime;
         }
 
-        public void markTiming()
+        public void MarkTiming()
         {
-            DateTime nowTime = DateTime.UtcNow;
-            TimingInTicks += nowTime.Ticks - this.CurrentStartTime.Ticks;
+            var nowTime = DateTime.UtcNow;
+            TimingInTicks += nowTime.Ticks - CurrentStartTime.Ticks;
         }
 
-        public void startTiming()
+        public void StartTiming()
         {
-            this.CurrentStartTime = DateTime.UtcNow;
+            CurrentStartTime = DateTime.UtcNow;
         }
 
-        public void addTiming(AccessTiming accessTiming)
+        public void AddTiming(AccessTiming accessTiming)
         {
-            this.TimingInTicks += accessTiming.TimingInTicks;
+            TimingInTicks += accessTiming.TimingInTicks;
         }
 
-        public double getTimingInSeconds()
+        public double GetTimingInSeconds()
         {
             return new TimeSpan(TimingInTicks).TotalSeconds;
         }
@@ -54,7 +51,7 @@ namespace WebScraper.Web
 
     }
 
-    public abstract class Agent
+    public abstract class Agent : ExtensionMethods
     {
 
         public string Name { get; set; }
@@ -63,23 +60,23 @@ namespace WebScraper.Web
 
         public WebBrowser WebBrowser { get; set; }
 
-        public Dictionary<String, Object> RequestContext { get; set; }
+        public Dictionary<string, object> RequestContext { get; set; }
 
-        public Dictionary<String, Object> Outputs { get; set; }
+        public Dictionary<string, object> Outputs { get; set; }
 
-        public Boolean MonitorTimings { get; set; }
+        public bool MonitorTimings { get; set; }
 
         protected Stack<AccessTiming> AccessTimes { get; set; }
 
-        protected WebAction activeAction;
+        protected IWebAction ActiveAction;
 
-        protected WebBrowserDocumentCompletedEventHandler completedEventHandler;
+        protected WebBrowserDocumentCompletedEventHandler CompletedEventHandler;
 
-        protected WebBrowserDocumentCompletedEventHandler completedEventHandlerForTiming;
+        protected WebBrowserDocumentCompletedEventHandler CompletedEventHandlerForTiming;
 
-        protected AutoResetEvent trigger;
+        protected AutoResetEvent Trigger;
 
-        protected WaitHandle[] waitHandles;
+        protected WaitHandle[] WaitHandles;
 
         public DateTime LastedUpdated { get; private set; }
 
@@ -89,154 +86,138 @@ namespace WebScraper.Web
 
         public Agent(WebBrowser browser = null)
         {
-            this.WebBrowser = browser;
+            WebBrowser = browser;
         }
 
 
-        public virtual void init()
+        public virtual void Init()
         {
             RequestContext = new Dictionary<string, object>();
             Outputs = new Dictionary<string, object>();
-            trigger = new AutoResetEvent(false);
-            waitHandles = new WaitHandle[] { trigger };
-            if (MonitorTimings)
-            {
-                completedEventHandlerForTiming = new WebBrowserDocumentCompletedEventHandler(this.pageLoadedForMonitoring);
-                WebBrowser.DocumentCompleted += completedEventHandlerForTiming;
-                AccessTimes = new Stack<AccessTiming>();
-            }
+            Trigger = new AutoResetEvent(false);
+            WaitHandles = new WaitHandle[] { Trigger };
+            if (!MonitorTimings) return;
+            CompletedEventHandlerForTiming = PageLoadedForMonitoring;
+            WebBrowser.DocumentCompleted += CompletedEventHandlerForTiming;
+            AccessTimes = new Stack<AccessTiming>();
         }
 
-        public virtual void doActions(List<WebAction> actions)
+        public virtual void DoActions(List<IWebAction> actions)
         {
-            completedEventHandler = new WebBrowserDocumentCompletedEventHandler(this.pageLoaded);
-            WebBrowser.DocumentCompleted += completedEventHandler;
-            Queue<WebAction> activeActions = new Queue<WebAction>(actions);
+            CompletedEventHandler = PageLoaded;
+            WebBrowser.DocumentCompleted += CompletedEventHandler;
+            var activeActions = new Queue<IWebAction>(actions);
             while (0 < activeActions.Count)
             {
-                activeAction = activeActions.Dequeue();
-                if (activeAction.canDoAction(this))
+                ActiveAction = activeActions.Dequeue();
+                if (!ActiveAction.CanDoAction(this)) continue;
+                if (ActiveAction.ShouldWaitAction(this))
                 {
-                    if (activeAction.shouldWaitAction(this))
-                    {
-                        trigger.Reset();
-                        WaitHandle.WaitAny(waitHandles);
-                    }
-                    activeAction.doAction(this);
-                    if (activeAction.isWaitForEvent())
-                    {
-                        trigger.Reset();
-                        WaitHandle.WaitAny(waitHandles);
-                    }
+                    Trigger.Reset();
+                    WaitHandle.WaitAny(WaitHandles);
+                }
+                ActiveAction.DoAction(this);
+                if (ActiveAction.isWaitForEvent())
+                {
+                    Trigger.Reset();
+                    WaitHandle.WaitAny(WaitHandles);
                 }
             }
-            completedActions();
+            CompletedActions();
         }
 
-        public virtual void completedActions()
+        public virtual void CompletedActions()
         {
-            WebBrowser.DocumentCompleted -= completedEventHandler;
+            WebBrowser.DocumentCompleted -= CompletedEventHandler;
         }
 
-        public virtual void cleanup()
+        public virtual void Cleanup()
         {
-            if (null != completedEventHandlerForTiming)
+            if (IsNull(CompletedEventHandlerForTiming)) return;
+            UpdateAccessTimings(WebBrowser.Url, true);
+            WebBrowser.DocumentCompleted -= CompletedEventHandlerForTiming;
+        }
+
+        public virtual void CompletedWaitAction()
+        {
+            Trigger.Set();
+        }
+
+        public virtual bool ValidateActiveAction()
+        {
+            if (!IsNull(ActiveAction) && ActiveAction.isWaitForEvent() && ActiveAction.Validate(this))
             {
-                updateAccessTimings(WebBrowser.Url, true);
-                WebBrowser.DocumentCompleted -= completedEventHandlerForTiming;
+
+                Trigger.Set();
+                return true;
+            }
+            return false;
+        }
+
+        public virtual void PageLoaded(object sender, WebBrowserDocumentCompletedEventArgs e)
+        {
+            ValidateActiveAction();
+        }
+
+        public virtual void PageLoadedForMonitoring(object sender, WebBrowserDocumentCompletedEventArgs e)
+        {
+            if (!MonitorTimings) return;
+            UpdateAccessTimings(e.Url);
+            LastedUpdated = DateTime.Now;
+        }
+
+        protected void UpdateAccessTimings(Uri url, bool updateOldOnly = false)
+        {
+            if (IsNull(AccessTimes)) return;
+            var lastEntry = 0 == AccessTimes.Count ? null : AccessTimes.Peek();
+            lastEntry?.MarkTiming();
+            if (!updateOldOnly)
+            {
+                AccessTimes.Push(new AccessTiming(url));
             }
         }
 
-        public virtual void completedWaitAction()
+        public List<AccessTiming> GetDomainAccessTimings()
         {
-            trigger.Set();
-        }
-
-        public virtual bool validateActiveAction()
-        {
-            bool ret = false;
-            if (null != activeAction && activeAction.isWaitForEvent() && activeAction.validate(this))
+            var ret = new List<AccessTiming>();
+            var timingMap = new Dictionary<string, AccessTiming>();
+            if (IsNull(AccessTimes)) return ret;
+            foreach (var accessTime in AccessTimes)
             {
-                ret = true;
-                trigger.Set();
-            }
-            return ret;
-        }
-
-        public virtual void pageLoaded(object sender, WebBrowserDocumentCompletedEventArgs e)
-        {
-            validateActiveAction();
-        }
-
-        public virtual void pageLoadedForMonitoring(object sender, WebBrowserDocumentCompletedEventArgs e)
-        {
-            if (MonitorTimings)
-            {
-                updateAccessTimings(e.Url);
-                LastedUpdated = DateTime.Now;
-            }
-        }
-
-        protected void updateAccessTimings(Uri url, Boolean updateOldOnly = false)
-        {
-            if (null != AccessTimes)
-            {
-                AccessTiming lastEntry = 0 == AccessTimes.Count ? null : AccessTimes.Peek();
-                if (null != lastEntry)
+                var timing = timingMap.ContainsKey(accessTime.URI.Host) ? timingMap[accessTime.URI.Host] : null;
+                if (IsNull(timing))
                 {
-                    lastEntry.markTiming();
+                    timing = new AccessTiming(accessTime.URI, accessTime.TimingInTicks);
+                    timingMap[accessTime.URI.Host] = timing;
+                    ret.Add(timing);
                 }
-                if (!updateOldOnly)
+                else
                 {
-                    AccessTimes.Push(new AccessTiming(url));
+                    timing.AddTiming(accessTime);
                 }
             }
-        }
-
-        public List<AccessTiming> getDomainAccessTimings()
-        {
-            List<AccessTiming> ret = new List<AccessTiming>();
-            Dictionary<String, AccessTiming> timingMap = new Dictionary<String, AccessTiming>();
-            if (null != AccessTimes)
-            {
-                foreach (AccessTiming accessTime in AccessTimes)
-                {
-                    AccessTiming timing = timingMap.ContainsKey(accessTime.URI.Host) ? timingMap[accessTime.URI.Host] : null;
-                    if (null == timing)
-                    {
-                        timing = new AccessTiming(accessTime.URI, accessTime.TimingInTicks);
-                        timingMap[accessTime.URI.Host] = timing;
-                        ret.Add(timing);
-                    }
-                    else
-                    {
-                        timing.addTiming(accessTime);
-                    }
-                }
-                ret.Reverse();
-            }
+            ret.Reverse();
             return ret;
         }
     }
 
     public class SimpleAgent : Agent
     {
-        public List<WebAction> WebActions { get; set; }
+        public List<IWebAction> WebActions { get; set; }
 
         public SimpleAgent()
-            : base()
         {
 
         }
-        public SimpleAgent(WebBrowser browser = null, List<WebAction> actions = null)
-            : base(browser: browser)
+        public SimpleAgent(WebBrowser browser = null, List<IWebAction> actions = null)
+            : base(browser)
         {
-            this.WebActions = actions;
+            WebActions = actions;
         }
 
-        public virtual void startAgent()
+        public virtual void StartAgent()
         {
-            doActions(WebActions);
+            DoActions(WebActions);
         }
 
     }

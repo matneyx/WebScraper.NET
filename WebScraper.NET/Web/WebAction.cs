@@ -1,35 +1,32 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Threading;
 using System.Windows.Forms;
-using System.Threading;
 
-namespace WebScraper.Web
+namespace WebScraper.NET.Web
 {
-    public interface WebAction
+    public interface IWebAction
     {
         bool isWaitForEvent();
-        void doAction(Agent agent);
-        bool validate(Agent agent);
-        bool canDoAction(Agent agent);
-        bool shouldWaitAction(Agent agent);
+        void DoAction(Agent agent);
+        bool Validate(Agent agent);
+        bool CanDoAction(Agent agent);
+        bool ShouldWaitAction(Agent agent);
+
     }
 
-    public abstract class AbstractWebAction : WebAction
+    public abstract class AbstractWebAction : ExtensionMethods, IWebAction
     {
         public bool IsWaitForEvent { get; set; }
-        public WebValidator Validator { get; set; }
-        public WebValidator CanDoValidator { get; set; }
-        public WebValidator ShouldWaitValidator { get; set; }
+        public IWebValidator Validator { get; set; }
+        public IWebValidator CanDoValidator { get; set; }
+        public IWebValidator ShouldWaitValidator { get; set; }
         public AbstractWebAction()
         {
 
         }
 
-        public AbstractWebAction(bool waitForEvent = false, WebValidator validator = null, WebValidator canDoValidator = null, WebValidator shouldWaitValidator = null)
+        public AbstractWebAction(bool waitForEvent = false, IWebValidator validator = null, IWebValidator canDoValidator = null, IWebValidator shouldWaitValidator = null)
         {
-            this.IsWaitForEvent = waitForEvent;
+            IsWaitForEvent = waitForEvent;
             Validator = validator;
             CanDoValidator = canDoValidator;
             ShouldWaitValidator = shouldWaitValidator;
@@ -40,31 +37,31 @@ namespace WebScraper.Web
             return IsWaitForEvent;
         }
 
-        public abstract void doAction(Agent agent);
-        public virtual bool validate(Agent agent)
+        public abstract void DoAction(Agent agent);
+        public virtual bool Validate(Agent agent)
         {
-            bool ret = true;
-            if (null != Validator)
+            var ret = true;
+            if (!IsNull(Validator))
             {
-                ret = Validator.validate(agent);
+                ret = Validator.Validate(agent);
             }
             return ret;
         }
-        public virtual bool canDoAction(Agent agent)
+        public virtual bool CanDoAction(Agent agent)
         {
-            bool ret = true;
-            if (null != CanDoValidator)
+            var ret = true;
+            if (!IsNull(CanDoValidator))
             {
-                ret = CanDoValidator.validate(agent);
+                ret = CanDoValidator.Validate(agent);
             }
             return ret;
         }
-        public virtual bool shouldWaitAction(Agent agent)
+        public virtual bool ShouldWaitAction(Agent agent)
         {
-            bool ret = false;
-            if (null != ShouldWaitValidator)
+            var ret = false;
+            if (!IsNull(ShouldWaitValidator))
             {
-                ret = !ShouldWaitValidator.validate(agent);
+                ret = !ShouldWaitValidator.Validate(agent);
             }
             return ret;
         }
@@ -72,7 +69,7 @@ namespace WebScraper.Web
 
     public class ExtractWebAction<V> : AbstractWebAction
     {
-        public DataExtractor<HtmlElement, V> Extractor { get; set; }
+        public IDataExtractor<HtmlElement, V> Extractor { get; set; }
         public HtmlElementLocator Locator { get; set; }
         public string ContextKey { get; set; }
         public V ExtractedData { get; set; }
@@ -80,54 +77,43 @@ namespace WebScraper.Web
         {
 
         }
-        public ExtractWebAction(DataExtractor<HtmlElement, V> extractor = null, string contextKey = null, HtmlElementLocator locator = null)
+        public ExtractWebAction(IDataExtractor<HtmlElement, V> extractor = null, string contextKey = null, HtmlElementLocator locator = null)
         {
             Extractor = extractor;
             ContextKey = contextKey;
             Locator = locator;
         }
-        public override void doAction(Agent agent)
+        public override void DoAction(Agent agent)
         {
-            this.ExtractedData = default(V);
+            ExtractedData = default(V);
             HtmlElement element = null;
-            if (null == Locator)
+            if (!IsNull(agent.WebBrowser.Document))
+                element = null == Locator ? agent.WebBrowser.Document?.Body : Locator.Locate(agent);
+            if (IsNull(element)) return;
+            var data = Extractor.Extract(element);
+            ExtractedData = data;
+            if (!IsNull(ContextKey) && !IsNull(data))
             {
-                element = agent.WebBrowser.Document.Body;
-            }
-            else
-            {
-                element = Locator.locate(agent);
-            }
-            if (null != element)
-            {
-                V data = Extractor.extract(element);
-                this.ExtractedData = data;
-                if (null != ContextKey && null != data)
-                {
-                    agent.RequestContext.Add(ContextKey, data);
-                }
+                agent.RequestContext.Add(ContextKey, data);
             }
         }
     }
 
     public class SimpleWebAction : AbstractWebAction
     {
-        public WebStep Step { get; set; }
+        public IWebStep Step { get; set; }
         public SimpleWebAction()
         {
 
         }
-        public SimpleWebAction(WebStep step = null, WebValidator validator = null, WebValidator canDoValidator = null, WebValidator shouldWaitValidator = null, bool waitForEvent = false)
+        public SimpleWebAction(IWebStep step = null, IWebValidator validator = null, IWebValidator canDoValidator = null, IWebValidator shouldWaitValidator = null, bool waitForEvent = false)
             : base(waitForEvent, validator, canDoValidator, shouldWaitValidator)
         {
             Step = step;
         }
-        public override void doAction(Agent agent)
+        public override void DoAction(Agent agent)
         {
-            if (null != Step)
-            {
-                Step.execute(agent);
-            }
+            Step?.Execute(agent);
         }
     }
 
@@ -138,37 +124,30 @@ namespace WebScraper.Web
         {
 
         }
-        public TimedWebAction(WebValidator validator = null, WebValidator canDoValidator = null, WebValidator shouldWaitValidator = null, bool waitForEvent = false)
+        public TimedWebAction(IWebValidator validator = null, IWebValidator canDoValidator = null, IWebValidator shouldWaitValidator = null, bool waitForEvent = false)
             : base(waitForEvent, validator, canDoValidator, shouldWaitValidator)
         {
         }
-        public override void doAction(Agent agent)
+        public override void DoAction(Agent agent)
         {
-            bool ret = false;
-            ret = Validator.validate(agent);
-            if (!ret)
-            {
-                if (null == Timer)
-                {
-                    TimerCallback callback = timerCallback;
-                    Timer = new System.Threading.Timer(callback, agent, 500, 500);
-                }
-            }
+            var ret = Validator.Validate(agent);
+            if (ret) return;
+            if (!IsNull(Timer)) return;
+            TimerCallback callback = TimerCallback;
+            Timer = new System.Threading.Timer(callback, agent, 500, 500);
         }
-        public void timerCallback(Object argument)
+        public void TimerCallback(object argument)
         {
-            if (Validator.validate((Agent)argument))
+            if (!Validator.Validate((Agent) argument)) return;
+            if (IsNull(Timer))
             {
-                if (null == Timer)
-                {
-                    //NOOP
-                }
-                else
-                {
-                    Timer.Dispose();
-                    Timer = null;
-                    ((Agent)argument).completedWaitAction();
-                }
+                //NOOP
+            }
+            else
+            {
+                Timer.Dispose();
+                Timer = null;
+                ((Agent)argument).CompletedWaitAction();
             }
         }
     }

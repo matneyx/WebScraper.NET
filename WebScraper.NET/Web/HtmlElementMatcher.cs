@@ -1,14 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Xml;
-using System.Windows.Forms;
+﻿using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 
-namespace WebScraper.Web
+namespace WebScraper.NET.Web
 {
-    public abstract class AbstractHtmlElementMatcher : ElementMatcher<HtmlElement>
+    public abstract class AbstractHtmlElementMatcher : ExtensionMethods, IElementMatcher<HtmlElement>
     {
         public string Name { get; set; }
         public AbstractHtmlElementMatcher()
@@ -17,13 +13,13 @@ namespace WebScraper.Web
         }
         public AbstractHtmlElementMatcher(string name = null)
         {
-            this.Name = name;
+            Name = name;
         }
-        public string getName()
+        public string GetName()
         {
             return Name;
         }
-        public abstract bool match(HtmlElement element);
+        public abstract bool Match(HtmlElement element);
     }
 
     public class AttributeHtmlElementMatcher : AbstractHtmlElementMatcher
@@ -34,71 +30,60 @@ namespace WebScraper.Web
         public Dictionary<string, Regex> AttributeRegexs { get; set; }
 
         public AttributeHtmlElementMatcher()
-            : base()
         {
 
         }
         public AttributeHtmlElementMatcher(string name = null, string attribute = null, string value = null)
             : base(name)
         {
-            Attributes = new Dictionary<string, string>();
-            Attributes[attribute] = value;
+            Attributes = new Dictionary<string, string> {[attribute] = value};
         }
         public AttributeHtmlElementMatcher(string name = null, Regex tagValueRegex = null, Dictionary<string, string> attributes = null, Dictionary<string, Regex> attributeRegexs = null)
             : base(name)
         {
-            this.TagValueRegex = tagValueRegex;
-            this.Attributes = attributes;
-            this.AttributeRegexs = attributeRegexs;
+            TagValueRegex = tagValueRegex;
+            Attributes = attributes;
+            AttributeRegexs = attributeRegexs;
         }
 
-        public override bool match(HtmlElement element)
+        public override bool Match(HtmlElement element)
         {
-            bool ret = false;
-            bool foundAtr = true;
-            if (null != Attributes)
+            var foundAtr = true;
+            if (!IsNull(Attributes))
             {
-                foreach (string key in Attributes.Keys)
+                foreach (var key in Attributes.Keys)
                 {
-                    string value = element.GetAttribute(key);
-                    if (null == value || !value.Equals(Attributes[key]))
-                    {
-                        foundAtr = false;
-                        break;
-                    }
+                    var value = element.GetAttribute(key);
+                    if (value.Equals(Attributes[key])) continue;
+                    foundAtr = false;
+                    break;
                 }
             }
-            bool foundAtrReg = true;
-            if (null != AttributeRegexs)
+            var foundAtrReg = true;
+            if (!IsNull(AttributeRegexs))
             {
-                foreach (string key in AttributeRegexs.Keys)
+                foreach (var key in AttributeRegexs.Keys)
                 {
-                    string value = element.GetAttribute(key);
-                    Regex regex = AttributeRegexs[key];
-                    if (null == value || !regex.IsMatch(value))
-                    {
-                        foundAtrReg = false;
-                        break;
-                    }
+                    var value = element.GetAttribute(key);
+                    var regex = AttributeRegexs[key];
+                    if (regex.IsMatch(value)) continue;
+                    foundAtrReg = false;
+                    break;
                 }
             }
-            bool foundValue = true;
-            if (null != TagValueRegex)
+            var foundValue = true;
+            if (!IsNull(TagValueRegex))
             {
-                foundValue = null != element.InnerText && TagValueRegex.IsMatch(element.InnerText);
+                foundValue = !IsNull(element.InnerText) && TagValueRegex.IsMatch(element.InnerText);
             }
-            if (foundAtr && foundValue && foundAtrReg)
-            {
-                ret = true;
-            }
-            return ret;
+
+            return foundAtr && foundValue && foundAtrReg;
         }
     }
 
     public class IdHtmlElementMatcher : AttributeHtmlElementMatcher
     {
         public IdHtmlElementMatcher()
-            : base()
         {
 
         }

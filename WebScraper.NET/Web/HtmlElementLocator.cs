@@ -1,14 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Xml;
 using System.Windows.Forms;
-using System.Text.RegularExpressions;
 
-namespace WebScraper.Web
+namespace WebScraper.NET.Web
 {
-    public abstract class HtmlElementLocator : ElementLocator<HtmlElement>
+    public abstract class HtmlElementLocator : ExtensionMethods, IElementLocator<HtmlElement>
     {
         public string Name { get; set; }
         public string ContextKey { get; set; }
@@ -18,20 +14,20 @@ namespace WebScraper.Web
         }
         public HtmlElementLocator(string name = null, string contextKey = null)
         {
-            this.Name = name;
-            this.ContextKey = contextKey;
+            Name = name;
+            ContextKey = contextKey;
         }
-        public string getName()
+        public string GetName()
         {
             return Name;
         }
-        public HtmlElement locate(Agent agent)
+        public HtmlElement Locate(Agent agent)
         {
             HtmlElement ret = null;
             MethodInvoker delegateCall = delegate
             {
-                ret = internalLocate(agent);
-                if (null != ContextKey)
+                ret = InternalLocate(agent);
+                if (!IsNull(ContextKey))
                 {
                     agent.RequestContext.Add(ContextKey, ret);
                 }
@@ -47,40 +43,27 @@ namespace WebScraper.Web
             }
             return ret;
         }
-        public abstract HtmlElement internalLocate(Agent agent);
+        public abstract HtmlElement InternalLocate(Agent agent);
     }
 
     public class SimpleHtmlElementLocator : HtmlElementLocator
     {
-        public ElementMatcher<HtmlElement> Matcher { get; set; }
+        public IElementMatcher<HtmlElement> Matcher { get; set; }
 
         public SimpleHtmlElementLocator()
-            : base()
         {
 
         }
-        public SimpleHtmlElementLocator(string name = null, ElementMatcher<HtmlElement> matcher = null
+        public SimpleHtmlElementLocator(string name = null, IElementMatcher<HtmlElement> matcher = null
             )
             : base(name)
         {
-            this.Matcher = matcher;
+            Matcher = matcher;
         }
 
-        public override HtmlElement internalLocate(Agent agent)
+        public override HtmlElement InternalLocate(Agent agent)
         {
-            HtmlElement ret = null;
-            if (null != agent)
-            {
-                foreach (HtmlElement element in agent.WebBrowser.Document.All)
-                {
-                    if (Matcher.match(element))
-                    {
-                        ret = element;
-                        break;
-                    }
-                }
-            }
-            return ret;
+            return agent?.WebBrowser.Document?.All.Cast<HtmlElement>().FirstOrDefault(element => Matcher.Match(element));
         }
     }
 
@@ -88,34 +71,31 @@ namespace WebScraper.Web
     public class IdElementLocator : HtmlElementLocator
     {
         public string Id { get; set; }
-        public ElementMatcher<HtmlElement> Matcher { get; set; }
+        public IElementMatcher<HtmlElement> Matcher { get; set; }
 
         public IdElementLocator()
-            : base()
         {
 
         }
 
-        public IdElementLocator(string name = null, string id = null, String contextKey = null, ElementMatcher<HtmlElement> matcher = null)
+        public IdElementLocator(string name = null, string id = null, string contextKey = null, IElementMatcher<HtmlElement> matcher = null)
             : base(name, contextKey)
         {
-            this.Id = id;
-            this.Matcher = matcher;
+            Id = id;
+            Matcher = matcher;
         }
 
-        public override HtmlElement internalLocate(Agent agent)
+        public override HtmlElement InternalLocate(Agent agent)
         {
             HtmlElement ret = null;
-            if (null != agent && null != agent.WebBrowser.Document)
+            if (!IsNull(agent?.WebBrowser.Document))
             {
                 ret = agent.WebBrowser.Document.GetElementById(Id);
             }
-            if (null != ret && null != Matcher)
+            if (IsNull(ret) || IsNull(Matcher)) return ret;
+            if (!Matcher.Match(ret))
             {
-                if (!Matcher.match(ret))
-                {
-                    ret = null;
-                }
+                ret = null;
             }
             return ret;
         }
@@ -125,62 +105,49 @@ namespace WebScraper.Web
     {
         public string Tag { get; set; }
         public bool Recursive { get; set; }
-        public ElementMatcher<HtmlElement> Matcher { get; set; }
-        public ChildHtmlElementLocator ChildLocator { get; set; }
+        public IElementMatcher<HtmlElement> Matcher { get; set; }
+        public IChildHtmlElementLocator ChildLocator { get; set; }
         public TagElementLocator()
-            : base()
         {
 
         }
 
-        public TagElementLocator(string name = null, string tag = null, bool recursive = false, String contextKey = null, ChildHtmlElementLocator childLocator = null, ElementMatcher<HtmlElement> matcher = null)
+        public TagElementLocator(string name = null, string tag = null, bool recursive = false, string contextKey = null, IChildHtmlElementLocator childLocator = null, IElementMatcher<HtmlElement> matcher = null)
             : base(name, contextKey)
         {
-            this.Tag = tag;
-            this.Recursive = recursive;
-            this.ChildLocator = childLocator;
-            this.Matcher = matcher;
+            Tag = tag;
+            Recursive = recursive;
+            ChildLocator = childLocator;
+            Matcher = matcher;
         }
 
-        private HtmlElement locateInternal(HtmlDocument document)
+        private HtmlElement LocateInternal(HtmlDocument document)
         {
             HtmlElement ret = null;
-            if (null != document)
+            if (IsNull(document)) return null;
+            var matches = new List<HtmlElement>();
+            var elements = document.GetElementsByTagName(Tag);
+            foreach (HtmlElement element in elements)
             {
-                List<HtmlElement> matches = new List<HtmlElement>();
-                HtmlElementCollection elements = document.GetElementsByTagName(Tag);
-                if (null != elements)
+                if (IsNull(Matcher) || Matcher.Match(element))
                 {
-                    foreach (HtmlElement element in elements)
+                    ret = ChildLocator == null ? element : ChildLocator.Locate(element);
+                    if (null != ret)
                     {
-                        if (null == Matcher || Matcher.match(element))
-                        {
-                            if (null == ChildLocator)
-                            {
-                                ret = element;
-                            }
-                            else
-                            {
-                                ret = ChildLocator.locate(element);
-                            }
-                            if (null != ret)
-                            {
-                                break;
-                            }
-                        }
+                        break;
                     }
                 }
-                if (null == ret && Recursive)
+            }
+            if (ret == null && Recursive)
+            {
+                if (!IsNull(document.Window?.Frames) && 0 < document.Window?.Frames?.Count)
                 {
-                    if (null != document.Window.Frames && 0 < document.Window.Frames.Count)
+                    foreach (HtmlWindow window in document.Window.Frames)
                     {
-                        foreach (HtmlWindow window in document.Window.Frames)
+                        ret = LocateInternal(window.Document);
+                        if (IsNull(ret))
                         {
-                            ret = locateInternal(window.Document);
-                            if (null != ret)
-                            {
-                                break;
-                            }
+                            break;
                         }
                     }
                 }
@@ -188,14 +155,9 @@ namespace WebScraper.Web
             return ret;
         }
 
-        public override HtmlElement internalLocate(Agent agent)
+        public override HtmlElement InternalLocate(Agent agent)
         {
-            HtmlElement ret = null;
-            if (null != agent)
-            {
-                ret = locateInternal(agent.WebBrowser.Document);
-            }
-            return ret;
+            return IsNull(agent) ? null : LocateInternal(agent.WebBrowser.Document);
         }
     }
 

@@ -1,22 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Windows.Forms;
 using System.Threading;
+using System.Windows.Forms;
 using Spring.Expressions;
 
-namespace WebScraper.Web
+namespace WebScraper.NET.Web
 {
-    public interface WebStep
+    public interface IWebStep
     {
-        string getName();
-        void execute(Agent agent);
-        bool validate(Agent agent);
+        string GetName();
+        void Execute(Agent agent);
+        bool Validate(Agent agent);
     }
 
-    public abstract class AbstractWebStep : WebStep
+    public abstract class AbstractWebStep : ExtensionMethods, IWebStep
     {
         public string Name { get; set; }
         public AbstractWebStep()
@@ -25,19 +22,19 @@ namespace WebScraper.Web
         }
         public AbstractWebStep(string name = null)
         {
-            this.Name = name;
+            Name = name;
         }
 
-        public string getName()
+        public string GetName()
         {
             return Name;
         }
 
-        public void execute(Agent agent)
+        public void Execute(Agent agent)
         {
             MethodInvoker delegateCall = delegate
             {
-                internalExecute(agent);
+                InternalExecute(agent);
             };
             if (agent.WebBrowser.InvokeRequired)
             {
@@ -48,34 +45,33 @@ namespace WebScraper.Web
                 delegateCall();
             }
         }
-        public abstract void internalExecute(Agent agent);
-        public abstract bool validate(Agent agent);
+        public abstract void InternalExecute(Agent agent);
+        public abstract bool Validate(Agent agent);
 
     }
 
     public class UrlWebStep : AbstractWebStep
     {
         public string Url { get; set; }
-        public WebValidator Validator { get; set; }
+        public IWebValidator Validator { get; set; }
 
         public UrlWebStep()
-            : base()
         {
 
         }
-        public UrlWebStep(String name = null, String url = null, WebValidator validator = null)
+        public UrlWebStep(string name = null, string url = null, IWebValidator validator = null)
             : base(name)
         {
-            this.Url = url;
-            this.Validator = validator;
+            Url = url;
+            Validator = validator;
         }
-        public override void internalExecute(Agent agent)
+        public override void InternalExecute(Agent agent)
         {
             agent.WebBrowser.Navigate(Url);
         }
-        public override bool validate(Agent agent)
+        public override bool Validate(Agent agent)
         {
-            return null == Validator ? true : Validator.validate(agent);
+            return Validator?.Validate(agent) ?? true;
         }
     }
     public class FormWebStep : AbstractWebStep
@@ -83,159 +79,143 @@ namespace WebScraper.Web
         public HtmlElementLocator ElementLocator { get; set; }
         public string Method { get; set; }
         public Dictionary<string, string> Parameters { get; set; }
-        public WebValidator Validator { get; set; }
-        public WebCallback PreElementLocatorCallback { get; set; }
+        public IWebValidator Validator { get; set; }
+        public IWebCallback PreElementLocatorCallback { get; set; }
 
         public FormWebStep()
-            : base()
         {
 
         }
-        public FormWebStep(String name = null, HtmlElementLocator locator = null, Dictionary<string, string> parameters = null, string method = "submit", WebValidator validator = null, WebCallback preElementLocatorCallback = null)
+        public FormWebStep(string name = null, HtmlElementLocator locator = null, Dictionary<string, string> parameters = null, string method = "submit", IWebValidator validator = null, IWebCallback preElementLocatorCallback = null)
             : base(name)
         {
-            this.ElementLocator = locator;
-            this.Method = method;
-            this.Parameters = parameters;
-            this.Validator = validator;
-            this.PreElementLocatorCallback = preElementLocatorCallback;
+            ElementLocator = locator;
+            Method = method;
+            Parameters = parameters;
+            Validator = validator;
+            PreElementLocatorCallback = preElementLocatorCallback;
         }
-        public override void internalExecute(Agent agent)
+        public override void InternalExecute(Agent agent)
         {
+            HtmlElement element;
             if (null != Parameters)
             {
-                foreach (string key in Parameters.Keys)
+                foreach (var key in Parameters.Keys)
                 {
-                    HtmlElement element = agent.WebBrowser.Document.GetElementById(key);
-                    if (null != element)
+                    element = agent?.WebBrowser.Document?.GetElementById(key);
+                    if (null == element) continue;
+                    var value = Parameters[key];
+                    var valueObj = agent.RequestContext.ContainsKey(value) ? agent.RequestContext[value] : null;
+                    object exprObj = null;
+                    try
                     {
-                        string value = Parameters[key];
-                        Object valueObj = agent.RequestContext.ContainsKey(value) ? agent.RequestContext[value] : null;
-                        Object exprObj = null;
-                        try
-                        {
-                            exprObj = ExpressionEvaluator.GetValue(agent, value);
-                            if (null != exprObj)
-                            {
-                                value = exprObj.ToString();
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                        }
-                        if (null == exprObj)
-                        {
-                            if (null != valueObj)
-                            {
-                                value = valueObj.ToString();
-                            }
-                        }
-                        else
+                        exprObj = ExpressionEvaluator.GetValue(agent, value);
+                        if (!IsNull(exprObj))
                         {
                             value = exprObj.ToString();
                         }
-                        element.SetAttribute("value", value);
                     }
+                    catch (Exception e)
+                    {
+                        // ignored
+                    }
+                    if (IsNull(exprObj))
+                    {
+                        if (!IsNull(valueObj))
+                        {
+                            value = valueObj.ToString();
+                        }
+                    }
+                    else
+                    {
+                        value = exprObj.ToString();
+                    }
+                    element.SetAttribute("value", value);
                 }
             }
-            if (null != PreElementLocatorCallback)
-            {
-                PreElementLocatorCallback.callback(agent);
-            }
-            if (null != ElementLocator)
-            {
-                HtmlElement element = ElementLocator.locate(agent);
-                if (null != element)
-                {
-                    element.InvokeMember(Method);
-                }
-            }
+            PreElementLocatorCallback?.Callback(agent);
+            if (IsNull(ElementLocator)) return;
+            element = ElementLocator.Locate(agent);
+            element?.InvokeMember(Method);
         }
-        public override bool validate(Agent agent)
+        public override bool Validate(Agent agent)
         {
-            return null == Validator ? true : Validator.validate(agent);
+            return Validator?.Validate(agent) ?? true;
         }
     }
     public class ClickWebStep : AbstractWebStep
     {
         public HtmlElementLocator ElementLocator { get; set; }
         public string Method { get; set; }
-        public WebValidator Validator { get; set; }
+        public IWebValidator Validator { get; set; }
 
         public ClickWebStep()
-            : base()
         {
 
         }
-        public ClickWebStep(String name = null, HtmlElementLocator locator = null, string method = "click", WebValidator validator = null)
+        public ClickWebStep(string name = null, HtmlElementLocator locator = null, string method = "click", IWebValidator validator = null)
             : base(name)
         {
-            this.ElementLocator = locator;
-            this.Method = method;
-            this.Validator = validator;
+            ElementLocator = locator;
+            Method = method;
+            Validator = validator;
         }
-        public override void internalExecute(Agent agent)
+        public override void InternalExecute(Agent agent)
         {
-            if (null != ElementLocator)
-            {
-                HtmlElement element = ElementLocator.locate(agent);
-                if (null != element)
-                {
-                    element.InvokeMember(Method);
-                }
-            }
+            if (IsNull(ElementLocator)) return;
+            var element = ElementLocator.Locate(agent);
+            element?.InvokeMember(Method);
         }
-        public override bool validate(Agent agent)
+        public override bool Validate(Agent agent)
         {
-            return null == Validator ? true : Validator.validate(agent);
+            return Validator?.Validate(agent) ?? true;
         }
     }
     public class CookieClearWebStep : AbstractWebStep
     {
-        public WebValidator Validator { get; set; }
+        public IWebValidator Validator { get; set; }
 
         public CookieClearWebStep()
-            : base()
         {
 
         }
-        public CookieClearWebStep(String name = null)
+        public CookieClearWebStep(string name = null)
             : base(name)
         {
         }
-        public override void internalExecute(Agent agent)
+        public override void InternalExecute(Agent agent)
         {
-            agent.WebBrowser.Document.Cookie = null;
+            if (!IsNull(agent.WebBrowser.Document)) agent.WebBrowser.Document.Cookie = null;
         }
-        public override bool validate(Agent agent)
+
+        public override bool Validate(Agent agent)
         {
-            return null == Validator ? true : Validator.validate(agent);
+            return Validator?.Validate(agent) ?? true;
         }
     }
     public class MonitorWebStep : AbstractWebStep
     {
         public int SleepTime { get; set; }
         public int MaxCount { get; set; }
-        public WebValidator Validator { get; set; }
+        public IWebValidator Validator { get; set; }
         public MonitorWebStep()
-            : base()
         {
 
         }
-        public MonitorWebStep(String name = null, int sleepTime = 500, int maxCount = 120, WebValidator validator = null)
+        public MonitorWebStep(string name = null, int sleepTime = 500, int maxCount = 120, IWebValidator validator = null)
             : base(name)
         {
-            this.SleepTime = sleepTime;
-            this.MaxCount = maxCount;
-            this.Validator = validator;
+            SleepTime = sleepTime;
+            MaxCount = maxCount;
+            Validator = validator;
         }
-        public override void internalExecute(Agent agent)
+        public override void InternalExecute(Agent agent)
         {
-            int count = 0;
-            bool done = false;
+            var count = 0;
+            var done = false;
             MethodInvoker delegateCall = delegate
             {
-                if (Validator.validate(agent))
+                if (Validator.Validate(agent))
                 {
                     done = true;
                     Console.WriteLine("Thread Completed");
@@ -259,47 +239,39 @@ namespace WebScraper.Web
                 count++;
             }
         }
-        public override bool validate(Agent agent)
+        public override bool Validate(Agent agent)
         {
-            return null == Validator ? true : Validator.validate(agent);
+            return Validator?.Validate(agent) ?? true;
         }
     }
     public class TimedProxyWebStep : AbstractWebStep
     {
         public System.Threading.Timer Timer { get; set; }
-        public WebStep Step { get; set; }
-        public WebValidator Validator { get; set; }
-        public TimedProxyWebStep(WebStep webStep = null, WebValidator validator = null)
-            : base()
+        public IWebStep Step { get; set; }
+        public IWebValidator Validator { get; set; }
+        public TimedProxyWebStep(IWebStep webStep = null, IWebValidator validator = null)
         {
             Step = webStep;
-            this.Validator = validator;
+            Validator = validator;
         }
-        public override void internalExecute(Agent agent)
+        public override void InternalExecute(Agent agent)
         {
-            bool ret = false;
-            ret = Validator.validate(agent);
-            if (!ret)
-            {
-                if (null == Timer)
-                {
-                    TimerCallback callback = timerCallback;
-                    Timer = new System.Threading.Timer(callback, agent, 500, 500);
-                }
-            }
+            var ret = Validator.Validate(agent);
+            if (ret || !IsNull(Timer)) return;
+            TimerCallback callback = TimerCallback;
+            Timer = new System.Threading.Timer(callback, agent, 500, 500);
         }
-        public override bool validate(Agent agent)
+
+        public override bool Validate(Agent agent)
         {
-            return null == Validator ? true : Validator.validate(agent);
+            return Validator?.Validate(agent) ?? true;
         }
-        public void timerCallback(Object argument)
+        public void TimerCallback(object argument)
         {
-            if (Validator.validate((Agent)argument))
-            {
-                Timer.Dispose();
-                Timer = null;
-                Step.execute((Agent)argument);
-            }
+            if (!Validator.Validate((Agent) argument)) return;
+            Timer.Dispose();
+            Timer = null;
+            Step.Execute((Agent)argument);
         }
     }
 

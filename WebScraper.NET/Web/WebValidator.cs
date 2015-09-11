@@ -1,27 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Windows.Forms;
+﻿using System.Text.RegularExpressions;
 using System.Threading;
+using System.Windows.Forms;
 
-namespace WebScraper.Web
+namespace WebScraper.NET.Web
 {
-    public delegate bool ValueValidateDelegate(String value);
+    public delegate bool ValueValidateDelegate(string value);
 
-    public interface WebValidator
+    public interface IWebValidator
     {
-        bool validate(Agent agent);
+        bool Validate(Agent agent);
     }
-    public abstract class AbstractWebValidator : WebValidator
+    public abstract class AbstractWebValidator : ExtensionMethods, IWebValidator
     {
-        public bool validate(Agent agent)
+        public bool Validate(Agent agent)
         {
-            bool ret = false;
+            var ret = false;
             MethodInvoker delegateCall = delegate
             {
-                ret = internalValidate(agent);
+                ret = InternalValidate(agent);
             };
             if (agent.WebBrowser.InvokeRequired)
             {
@@ -33,7 +29,7 @@ namespace WebScraper.Web
             }
             return ret;
         }
-        public abstract bool internalValidate(Agent agent);
+        public abstract bool InternalValidate(Agent agent);
 
     }
     public class TitleWebValidator : AbstractWebValidator
@@ -47,13 +43,14 @@ namespace WebScraper.Web
         }
         public TitleWebValidator(string title = null, Regex titleRegex = null)
         {
-            this.Title = title;
-            this.TitleRegex = titleRegex;
+            Title = title;
+            TitleRegex = titleRegex;
         }
-        public override bool internalValidate(Agent agent)
+        public override bool InternalValidate(Agent agent)
         {
-            bool ret = false;
-            string title = agent.WebBrowser.Document.Title;
+            var ret = false;
+            if (IsNull(agent.WebBrowser.Document)) return ret;
+            var title = agent.WebBrowser.Document.Title;
             if (null != Title)
             {
                 ret = title.Equals(Title);
@@ -77,12 +74,10 @@ namespace WebScraper.Web
         {
             Locator = locator;
         }
-        public override bool internalValidate(Agent agent)
+        public override bool InternalValidate(Agent agent)
         {
-            bool ret = false;
-            HtmlElement element = Locator.locate(agent);
-            ret = null != element;
-            return ret;
+            var element = Locator.Locate(agent);
+            return !IsNull(element);
         }
 
     }
@@ -95,47 +90,25 @@ namespace WebScraper.Web
         public Regex ValueRegex { get; set; }
         public ValueCheckValidator(HtmlElementLocator locator = null, string attributeName = null, string value = null, Regex valueRegex = null)
         {
-            this.Locator = locator;
-            this.AttributeName = attributeName;
-            this.Value = value;
-            this.ValueRegex = valueRegex;
+            Locator = locator;
+            AttributeName = attributeName;
+            Value = value;
+            ValueRegex = valueRegex;
         }
-        public override bool internalValidate(Agent agent)
+        public override bool InternalValidate(Agent agent)
         {
-            bool ret = false;
-            if (null != Locator)
+            var ret = false;
+            if (IsNull(Locator)) return ret;
+            var element = Locator.Locate(agent);
+            if (IsNull(element)) return ret;
+            if (IsNull(AttributeName))
             {
-                HtmlElement element = Locator.locate(agent);
-                if (null != element)
-                {
-                    if (null == AttributeName)
-                    {
-                        if (null == ValueRegex)
-                        {
-                            ret = element.InnerText.Equals(Value);
-                        }
-                        else
-                        {
-                            ret = ValueRegex.IsMatch(element.InnerText);
-                        }
-                    }
-                    else
-                    {
-                        String value = element.GetAttribute(AttributeName);
-                        if (null != value)
-                        {
-                            if (null == ValueRegex)
-                            {
-                                ret = value.Equals(Value);
-                            }
-                            else
-                            {
-                                ret = ValueRegex.IsMatch(value);
-                            }
-                        }
-
-                    }
-                }
+                ret = ValueRegex?.IsMatch(element.InnerText) ?? element.InnerText.Equals(Value);
+            }
+            else
+            {
+                var value = element.GetAttribute(AttributeName);
+                ret = ValueRegex?.IsMatch(value) ?? value.Equals(Value);
             }
             return ret;
         }
@@ -150,39 +123,26 @@ namespace WebScraper.Web
         public ValueValidateDelegate CheckDelegate { get; set; }
         public StyleCheckValidator(HtmlElementLocator locator = null, string value = null, Regex valueRegex = null, ValueValidateDelegate checkDelegate = null)
         {
-            this.Locator = locator;
-            this.Value = value;
-            this.ValueRegex = valueRegex;
-            this.CheckDelegate = checkDelegate;
+            Locator = locator;
+            Value = value;
+            ValueRegex = valueRegex;
+            CheckDelegate = checkDelegate;
         }
-        public override bool internalValidate(Agent agent)
+        public override bool InternalValidate(Agent agent)
         {
-            bool ret = false;
-            if (null != Locator)
+            var ret = false;
+            if (IsNull(Locator)) return ret;
+            var element = Locator.Locate(agent);
+            if (IsNull(element)) return ret;
+            var value = element.Style;
+            if (IsNull(CheckDelegate))
             {
-                HtmlElement element = Locator.locate(agent);
-                if (null != element)
-                {
-                    String value = element.Style;
-                    if (null == CheckDelegate)
-                    {
-                        if (null != value)
-                        {
-                            if (null == ValueRegex)
-                            {
-                                ret = value.Equals(Value);
-                            }
-                            else
-                            {
-                                ret = ValueRegex.IsMatch(value);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        ret = CheckDelegate(value);
-                    }
-                }
+                if (IsNull(value)) return ret;
+                ret = ValueRegex?.IsMatch(value) ?? value.Equals(Value);
+            }
+            else
+            {
+                ret = CheckDelegate(value);
             }
             return ret;
         }
@@ -190,34 +150,27 @@ namespace WebScraper.Web
 
     public class TimedProxyWebValidator : AbstractWebValidator
     {
-        public WebValidator Validator { get; set; }
+        public IWebValidator Validator { get; set; }
         public System.Threading.Timer Timer { get; set; }
-        public TimedProxyWebValidator(WebValidator validator = null)
+        public TimedProxyWebValidator(IWebValidator validator = null)
         {
             Validator = validator;
         }
-        public override bool internalValidate(Agent agent)
+        public override bool InternalValidate(Agent agent)
         {
-            bool ret = false;
-            ret = Validator.validate(agent);
-            if (!ret)
-            {
-                if (null == Timer)
-                {
-                    TimerCallback callback = timerCallback;
-                    Timer = new System.Threading.Timer(callback, agent, 500, 500);
-                }
-            }
-            return ret;
+
+            if (Validator.Validate(agent)) return true;
+            if (IsNull(Timer)) return false;
+            TimerCallback callback = TimerCallback;
+            Timer = new System.Threading.Timer(callback, agent, 500, 500);
+            return false;
         }
-        public void timerCallback(Object argument)
+        public void TimerCallback(object argument)
         {
-            if (Validator.validate((Agent)argument))
-            {
-                Timer.Dispose();
-                Timer = null;
-                ((Agent)argument).completedWaitAction();
-            }
+            if (!Validator.Validate((Agent) argument)) return;
+            Timer.Dispose();
+            Timer = null;
+            ((Agent)argument).CompletedWaitAction();
         }
     }
 
