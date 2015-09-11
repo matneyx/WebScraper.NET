@@ -88,7 +88,7 @@ namespace WebScraper.NET.Web
             ExtractedData = default(V);
             HtmlElement element = null;
             if (!IsNull(agent.WebBrowser.Document))
-                element = null == Locator ? agent.WebBrowser.Document?.Body : Locator.Locate(agent);
+                element = IsNull(Locator) ? agent.WebBrowser.Document?.Body : Locator.Locate(agent);
             if (IsNull(element)) return;
             var data = Extractor.Extract(element);
             ExtractedData = data;

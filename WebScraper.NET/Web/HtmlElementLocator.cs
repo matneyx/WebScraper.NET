@@ -132,20 +132,20 @@ namespace WebScraper.NET.Web
                 if (IsNull(Matcher) || Matcher.Match(element))
                 {
                     ret = ChildLocator == null ? element : ChildLocator.Locate(element);
-                    if (null != ret)
+                    if (!IsNull(ret))
                     {
                         break;
                     }
                 }
             }
-            if (ret == null && Recursive)
+            if (IsNull(ret) && Recursive)
             {
                 if (!IsNull(document.Window?.Frames) && 0 < document.Window?.Frames?.Count)
                 {
                     foreach (HtmlWindow window in document.Window.Frames)
                     {
                         ret = LocateInternal(window.Document);
-                        if (IsNull(ret))
+                        if (!IsNull(ret))
                         {
                             break;
                         }

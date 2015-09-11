@@ -181,7 +181,7 @@ namespace WebScraper.NET.Web
         {
             var ret = new List<AccessTiming>();
             var timingMap = new Dictionary<string, AccessTiming>();
-            if (IsNull(AccessTimes)) return ret;
+            if (!IsNull(AccessTimes)) return ret;
             foreach (var accessTime in AccessTimes)
             {
                 var timing = timingMap.ContainsKey(accessTime.URI.Host) ? timingMap[accessTime.URI.Host] : null;
