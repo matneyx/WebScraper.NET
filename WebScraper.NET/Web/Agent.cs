@@ -77,7 +77,7 @@ namespace WebScraper.Web
 
         protected WebBrowserDocumentCompletedEventHandler CompletedEventHandlerForTiming;
 
-        protected AutoResetEvent Trigger;
+        public AutoResetEvent Trigger;
 
         protected WaitHandle[] WaitHandles;
 
