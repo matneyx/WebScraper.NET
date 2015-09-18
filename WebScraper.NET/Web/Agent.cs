@@ -30,23 +30,23 @@ namespace WebScraper.Web
             this.CurrentStartTime = this.StartTime;
         }
 
-        public void markTiming()
+        public void MarkTiming()
         {
             DateTime nowTime = DateTime.UtcNow;
             TimingInTicks += nowTime.Ticks - this.CurrentStartTime.Ticks;
         }
 
-        public void startTiming()
+        public void StartTiming()
         {
             this.CurrentStartTime = DateTime.UtcNow;
         }
 
-        public void addTiming(AccessTiming accessTiming)
+        public void AddTiming(AccessTiming accessTiming)
         {
             this.TimingInTicks += accessTiming.TimingInTicks;
         }
 
-        public double getTimingInSeconds()
+        public double GetTimingInSeconds()
         {
             return new TimeSpan(TimingInTicks).TotalSeconds;
         }
@@ -63,23 +63,23 @@ namespace WebScraper.Web
 
         public WebBrowser WebBrowser { get; set; }
 
-        public Dictionary<String, Object> RequestContext { get; set; }
+        public Dictionary<string, object> RequestContext { get; set; }
 
-        public Dictionary<String, Object> Outputs { get; set; }
+        public Dictionary<string, object> Outputs { get; set; }
 
-        public Boolean MonitorTimings { get; set; }
+        public bool MonitorTimings { get; set; }
 
         protected Stack<AccessTiming> AccessTimes { get; set; }
 
-        protected WebAction activeAction;
+        protected WebAction ActiveAction;
 
-        protected WebBrowserDocumentCompletedEventHandler completedEventHandler;
+        protected WebBrowserDocumentCompletedEventHandler CompletedEventHandler;
 
-        protected WebBrowserDocumentCompletedEventHandler completedEventHandlerForTiming;
+        protected WebBrowserDocumentCompletedEventHandler CompletedEventHandlerForTiming;
 
-        protected AutoResetEvent trigger;
+        protected AutoResetEvent Trigger;
 
-        protected WaitHandle[] waitHandles;
+        protected WaitHandle[] WaitHandles;
 
         public DateTime LastedUpdated { get; private set; }
 
@@ -93,98 +93,98 @@ namespace WebScraper.Web
         }
 
 
-        public virtual void init()
+        public virtual void Init()
         {
             RequestContext = new Dictionary<string, object>();
             Outputs = new Dictionary<string, object>();
-            trigger = new AutoResetEvent(false);
-            waitHandles = new WaitHandle[] { trigger };
+            Trigger = new AutoResetEvent(false);
+            WaitHandles = new WaitHandle[] { Trigger };
             if (MonitorTimings)
             {
-                completedEventHandlerForTiming = new WebBrowserDocumentCompletedEventHandler(this.pageLoadedForMonitoring);
-                WebBrowser.DocumentCompleted += completedEventHandlerForTiming;
+                CompletedEventHandlerForTiming = new WebBrowserDocumentCompletedEventHandler(this.PageLoadedForMonitoring);
+                WebBrowser.DocumentCompleted += CompletedEventHandlerForTiming;
                 AccessTimes = new Stack<AccessTiming>();
             }
         }
 
-        public virtual void doActions(List<WebAction> actions)
+        public virtual void DoActions(List<WebAction> actions)
         {
-            completedEventHandler = new WebBrowserDocumentCompletedEventHandler(this.pageLoaded);
-            WebBrowser.DocumentCompleted += completedEventHandler;
-            Queue<WebAction> activeActions = new Queue<WebAction>(actions);
+            CompletedEventHandler = new WebBrowserDocumentCompletedEventHandler(this.PageLoaded);
+            WebBrowser.DocumentCompleted += CompletedEventHandler;
+            var activeActions = new Queue<WebAction>(actions);
             while (0 < activeActions.Count)
             {
-                activeAction = activeActions.Dequeue();
-                if (activeAction.canDoAction(this))
+                ActiveAction = activeActions.Dequeue();
+                if (ActiveAction.canDoAction(this))
                 {
-                    if (activeAction.shouldWaitAction(this))
+                    if (ActiveAction.shouldWaitAction(this))
                     {
-                        trigger.Reset();
-                        WaitHandle.WaitAny(waitHandles);
+                        Trigger.Reset();
+                        WaitHandle.WaitAny(WaitHandles);
                     }
-                    activeAction.doAction(this);
-                    if (activeAction.isWaitForEvent())
+                    ActiveAction.doAction(this);
+                    if (ActiveAction.isWaitForEvent())
                     {
-                        trigger.Reset();
-                        WaitHandle.WaitAny(waitHandles);
+                        Trigger.Reset();
+                        WaitHandle.WaitAny(WaitHandles);
                     }
                 }
             }
-            completedActions();
+            CompletedActions();
         }
 
-        public virtual void completedActions()
+        public virtual void CompletedActions()
         {
-            WebBrowser.DocumentCompleted -= completedEventHandler;
+            WebBrowser.DocumentCompleted -= CompletedEventHandler;
         }
 
-        public virtual void cleanup()
+        public virtual void Cleanup()
         {
-            if (null != completedEventHandlerForTiming)
+            if (null != CompletedEventHandlerForTiming)
             {
-                updateAccessTimings(WebBrowser.Url, true);
-                WebBrowser.DocumentCompleted -= completedEventHandlerForTiming;
+                UpdateAccessTimings(WebBrowser.Url, true);
+                WebBrowser.DocumentCompleted -= CompletedEventHandlerForTiming;
             }
         }
 
-        public virtual void completedWaitAction()
+        public virtual void CompletedWaitAction()
         {
-            trigger.Set();
+            Trigger.Set();
         }
 
-        public virtual bool validateActiveAction()
+        public virtual bool ValidateActiveAction()
         {
-            bool ret = false;
-            if (null != activeAction && activeAction.isWaitForEvent() && activeAction.validate(this))
+            var ret = false;
+            if (null != ActiveAction && ActiveAction.isWaitForEvent() && ActiveAction.validate(this))
             {
                 ret = true;
-                trigger.Set();
+                Trigger.Set();
             }
             return ret;
         }
 
-        public virtual void pageLoaded(object sender, WebBrowserDocumentCompletedEventArgs e)
+        public virtual void PageLoaded(object sender, WebBrowserDocumentCompletedEventArgs e)
         {
-            validateActiveAction();
+            ValidateActiveAction();
         }
 
-        public virtual void pageLoadedForMonitoring(object sender, WebBrowserDocumentCompletedEventArgs e)
+        public virtual void PageLoadedForMonitoring(object sender, WebBrowserDocumentCompletedEventArgs e)
         {
             if (MonitorTimings)
             {
-                updateAccessTimings(e.Url);
+                UpdateAccessTimings(e.Url);
                 LastedUpdated = DateTime.Now;
             }
         }
 
-        protected void updateAccessTimings(Uri url, Boolean updateOldOnly = false)
+        protected void UpdateAccessTimings(Uri url, bool updateOldOnly = false)
         {
             if (null != AccessTimes)
             {
                 AccessTiming lastEntry = 0 == AccessTimes.Count ? null : AccessTimes.Peek();
                 if (null != lastEntry)
                 {
-                    lastEntry.markTiming();
+                    lastEntry.MarkTiming();
                 }
                 if (!updateOldOnly)
                 {
@@ -210,7 +210,7 @@ namespace WebScraper.Web
                     }
                     else
                     {
-                        timing.addTiming(accessTime);
+                        timing.AddTiming(accessTime);
                     }
                 }
                 ret.Reverse();
@@ -236,7 +236,7 @@ namespace WebScraper.Web
 
         public virtual void startAgent()
         {
-            doActions(WebActions);
+            DoActions(WebActions);
         }
 
     }

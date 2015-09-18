@@ -216,7 +216,7 @@ namespace WebScraper.Web
             {
                 Timer.Dispose();
                 Timer = null;
-                ((Agent)argument).completedWaitAction();
+                ((Agent)argument).CompletedWaitAction();
             }
         }
     }

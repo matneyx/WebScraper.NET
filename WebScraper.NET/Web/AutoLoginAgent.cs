@@ -23,12 +23,12 @@ namespace WebScraper.Web
 
         public void doLogin()
         {
-            doActions(LoginActions);
+            DoActions(LoginActions);
         }
         public void doLogout()
         {
-            doActions(LogoutActions);
-            cleanup();
+            DoActions(LogoutActions);
+            Cleanup();
         }
         public bool isLoggedIn()
         {
